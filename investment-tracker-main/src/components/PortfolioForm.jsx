@@ -61,24 +61,24 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Name */}
       <div>
-        <label className="block text-gray-700 font-medium">Name*</label>
+        <label className="block text-gray-300 font-medium mb-1">Name*</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400 outline-none"
+          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
           required
         />
-        {errors.name && <div className="text-red-500 text-sm mt-1">{errors.name}</div>}
+        {errors.name && <div className="text-red-400 text-sm mt-1">{errors.name}</div>}
       </div>
 
       {/* Description */}
       <div>
-        <label className="block text-gray-700 font-medium">Description</label>
+        <label className="block text-gray-300 font-medium mb-1">Description</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-400 outline-none"
+          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px]"
           placeholder="(Optional)"
         />
       </div>
@@ -86,7 +86,7 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
       {/* Submit Button */}
       <button
         type="submit"
-        className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition"
+        className="w-full bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-500 hover:to-teal-400 text-white py-2.5 rounded-lg font-semibold shadow-md transition"
       >
         {existingPortfolio ? "Update Portfolio" : "Add Portfolio"}
       </button>

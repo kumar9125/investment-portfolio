@@ -49,7 +49,7 @@ export default function AssetForm({ onClose, asset }) {
 
     if (asset) {
       // ✅ Update existing asset
-      dispatch(updateAsset({ id: asset._id, ...form }));
+      dispatch(updateAsset({ id: asset._id, updatedData: form }));
     } else {
       // ✅ Add new asset
       dispatch(addAsset(form));

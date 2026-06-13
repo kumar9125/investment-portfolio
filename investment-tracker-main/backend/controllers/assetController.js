@@ -12,6 +12,11 @@ exports.addAsset = async (req, res) => {
       return res.status(404).json({ message: "Portfolio not found" });
     }
 
+    // Ensure user owns this portfolio
+    if (selectedPortfolio.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to access this portfolio" });
+    }
+
     const existingAsset = await Asset.findOne({ portfolio: selectedPortfolio._id, name });
     if (existingAsset) {
       return res.status(400).json({ message: "Asset already exists in this portfolio" });
@@ -45,6 +50,11 @@ exports.getAssetsByPortfolio = async (req, res) => {
       return res.status(404).json({ message: "Portfolio not found" });
     }
 
+    // Ensure user owns this portfolio
+    if (portfolio.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to access this portfolio" });
+    }
+
     const assets = await Asset.find({ portfolio: portfolioId });
     res.json({
       message: "Assets fetched successfully",
@@ -59,20 +69,25 @@ exports.getAssetsByPortfolio = async (req, res) => {
 exports.updateAsset = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(req.body);
-    console.log(id);
-    const asset = await Asset.findByIdAndUpdate(id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+    const asset = await Asset.findById(id);
 
     if (!asset) {
       return res.status(404).json({ message: "Asset not found" });
     }
 
+    const portfolio = await Portfolio.findById(asset.portfolio);
+    if (!portfolio || portfolio.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to update this asset" });
+    }
+
+    const updatedAsset = await Asset.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+
     res.json({
       message: "Asset updated successfully",
-      asset,
+      asset: updatedAsset,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -83,13 +98,18 @@ exports.updateAsset = async (req, res) => {
 exports.deleteAsset = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const asset = await Asset.findByIdAndDelete(id);
+    const asset = await Asset.findById(id);
 
     if (!asset) {
       return res.status(404).json({ message: "Asset not found" });
     }
 
+    const portfolio = await Portfolio.findById(asset.portfolio);
+    if (!portfolio || portfolio.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to delete this asset" });
+    }
+
+    await Asset.findByIdAndDelete(id);
     res.json({ message: "Asset deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -104,6 +124,11 @@ exports.getAssetHistory = async (req, res) => {
 
     if (!asset) {
       return res.status(404).json({ message: "Asset not found" });
+    }
+
+    const portfolio = await Portfolio.findById(asset.portfolio);
+    if (!portfolio || portfolio.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized to access this asset" });
     }
 
     const days = 30; // Return a default 30-day timeframe
