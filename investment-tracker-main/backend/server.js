@@ -17,23 +17,13 @@ connectDB();
 const app = express();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-// In production, restrict to the deployed frontend URL.
-// Locally, allow anything (helpful for dev).
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
-  : ["http://localhost:5173", "http://localhost:3000"];
-
+// CORS must run before body parsing and routes so preflight OPTIONS requests succeed.
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin (e.g. mobile apps, curl, Render health check)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        return callback(null, true);
-      }
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin: "https://investment-portfolio-1.onrender.com",
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
