@@ -16,7 +16,7 @@ export default function Dashboard() {
   const { portfolios, loading: portfoliosLoading } = useSelector(
     (state) => state.portfolios
   );
-  const { assets, assetHistory, historyLoading, loading: assetsLoading } = useSelector(
+  const { assets, assetHistory, loading: assetsLoading } = useSelector(
     (state) => state.assets
   );
 
@@ -54,6 +54,14 @@ export default function Dashboard() {
     notes: ""
   });
 
+  const isNameInvalid = (nameVal) => {
+    const trimmed = (nameVal || "").trim();
+    const nameRegex = /^(?=.*[A-Za-z])[A-Za-z0-9\s&().'-]{2,100}$/;
+    return !trimmed || !nameRegex.test(trimmed);
+  };
+
+  const [txErrors, setTxErrors] = useState({});
+
   // Watchlist Form state
   const [newWatchlistForm, setNewWatchlistForm] = useState({
     symbol: "",
@@ -87,12 +95,16 @@ export default function Dashboard() {
   // Fetch transactional ledger and watchlist when active tab or portfolio changes
   useEffect(() => {
     if (selectedPortfolio) {
-      if (activeTab === "transactions") {
-        fetchTransactionsData();
-      } else if (activeTab === "watchlist") {
-        fetchWatchlistData();
-      }
+      fetchTransactionsData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPortfolio]);
+
+  useEffect(() => {
+    if (selectedPortfolio && activeTab === "watchlist") {
+      fetchWatchlistData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPortfolio, activeTab]);
 
   // Fetch chart data when asset selection changes
@@ -304,32 +316,90 @@ export default function Dashboard() {
     }
   };
 
-  // Benchmark return - strictly deterministic growth curve
+  // Benchmark return - dynamic portfolio growth relative to Nifty 50 Index (Transaction History based)
   const benchmarkChartData = useMemo(() => {
-    if (assets.length === 0) return [];
+    if (assets.length === 0 || transactions.length === 0) return [];
+
+    const sortedTxs = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    if (sortedTxs.length === 0) return [];
+
+    const startDate = new Date(sortedTxs[0].date);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date();
+    endDate.setHours(0, 0, 0, 0);
+
     const portfolioReturnSeries = [];
     const niftySeries = [];
-    let currentDate = new Date();
-    currentDate.setDate(currentDate.getDate() - 30);
+    
+    // Track asset holdings
+    const assetQuantities = {};
+    const assetLastPrices = {};
 
-    const dailyReturnStep = profitPercentage / 30;
-    let portfolioBase = 100;
-    let niftyBase = 100;
+    let txIndex = 0;
+    let niftyValue = 100;
+    let initialPortfolioValue = null;
 
-    for (let i = 0; i < 30; i++) {
-      const time = currentDate.getTime();
-      
-      portfolioReturnSeries.push({ x: time, y: Number((portfolioBase + (dailyReturnStep * i)).toFixed(2)) });
-      niftySeries.push({ x: time, y: Number((niftyBase + (0.04 * i)).toFixed(2)) });
+    let tempDate = new Date(startDate);
+    
+    while (tempDate <= endDate) {
+      const nextDay = new Date(tempDate);
+      nextDay.setDate(nextDay.getDate() + 1);
 
-      currentDate.setDate(currentDate.getDate() + 1);
+      while (txIndex < sortedTxs.length && new Date(sortedTxs[txIndex].date) < nextDay) {
+        const tx = sortedTxs[txIndex];
+        const name = tx.assetName;
+        const qty = tx.quantity;
+        const price = tx.price;
+        const type = tx.type;
+
+        if (!assetQuantities[name]) {
+          assetQuantities[name] = 0;
+        }
+
+        if (type === "buy") {
+          assetQuantities[name] += qty;
+        } else if (type === "sell") {
+          assetQuantities[name] = Math.max(0, assetQuantities[name] - qty);
+        }
+
+        assetLastPrices[name] = price;
+        txIndex++;
+      }
+
+      let portfolioValueOnDay = 0;
+      for (const name of Object.keys(assetQuantities)) {
+        portfolioValueOnDay += assetQuantities[name] * assetLastPrices[name];
+      }
+
+      if (initialPortfolioValue === null && portfolioValueOnDay > 0) {
+        initialPortfolioValue = portfolioValueOnDay;
+      }
+
+      let normPortfolioValue = 100;
+      if (initialPortfolioValue > 0) {
+        normPortfolioValue = (portfolioValueOnDay / initialPortfolioValue) * 100;
+      }
+
+      portfolioReturnSeries.push({
+        x: tempDate.getTime(),
+        y: Number(normPortfolioValue.toFixed(2))
+      });
+
+      niftySeries.push({
+        x: tempDate.getTime(),
+        y: Number(niftyValue.toFixed(2))
+      });
+
+      niftyValue = niftyValue * 1.0004; // Nifty 50 flat daily growth (~15% annually)
+
+      tempDate.setDate(tempDate.getDate() + 1);
     }
 
     return [
       { name: "Your Portfolio", data: portfolioReturnSeries },
       { name: "Nifty 50 Index (Bench)", data: niftySeries }
     ];
-  }, [assets, profitPercentage]);
+  }, [assets, transactions]);
 
   // Watchlist handlers
   const handleAddWatchlist = async (e) => {
@@ -358,15 +428,24 @@ export default function Dashboard() {
   // Transaction Ledger handlers
   const handleAddTransaction = async (e) => {
     e.preventDefault();
-    if (!newTxForm.assetName || !newTxForm.quantity || !newTxForm.price) return;
+    const cleanName = (newTxForm.assetName || "").trim();
+    if (isNameInvalid(cleanName)) {
+      setTxErrors({
+        assetName: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+      });
+      return;
+    }
+    if (!cleanName || !newTxForm.quantity || !newTxForm.price) return;
     try {
       await axiosInstance.post("/transactions", {
         portfolioId: selectedPortfolio,
-        ...newTxForm
+        ...newTxForm,
+        assetName: cleanName
       });
       dispatch(fetchAssets(selectedPortfolio));
       fetchTransactionsData();
       setShowTxModal(false);
+      setTxErrors({});
       setNewTxForm({
         assetName: "",
         assetType: "stock",
@@ -695,6 +774,7 @@ export default function Dashboard() {
               <div>
                 <h2 className="text-xl font-bold text-white">Asset Performance</h2>
                 <p className="text-gray-400 text-sm">30-day historical chart</p>
+                <div className="text-xs text-gray-500 mt-1 font-medium">Data Source: Transaction History</div>
               </div>
 
               {assets.length > 0 && (
@@ -731,6 +811,12 @@ export default function Dashboard() {
               ) : !selectedAssetForChart ? (
                 <div className="flex items-center justify-center h-full text-gray-500 text-lg">
                   Select an asset from the table below to view its chart.
+                </div>
+              ) : (!assetHistory || assetHistory.length === 0) ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 text-center p-6">
+                  <span className="text-3xl mb-2">📈</span>
+                  <p className="font-semibold text-lg text-white">No chart data yet.</p>
+                  <p className="text-sm text-gray-500 max-w-md mt-1">Add transactions or connect a price source to see performance over time.</p>
                 </div>
               ) : (
                 <Chart 
@@ -977,7 +1063,7 @@ export default function Dashboard() {
               <div className="h-64 flex items-center justify-center">
                 <EmptyState 
                   icon="📊"
-                  title="No assets available"
+                  title="No allocation history available"
                   message="Allocation analytics will display once holdings are active."
                 />
               </div>
@@ -1006,12 +1092,13 @@ export default function Dashboard() {
           {/* Benchmark Comparison */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
             <h3 className="text-xl font-bold mb-1">Benchmark Comparison</h3>
-            <p className="text-xs text-gray-400 mb-6">Normalized performance relative to Nifty 50 Index (Base 100)</p>
-            {assets.length === 0 ? (
+            <p className="text-xs text-gray-400 mb-2">Normalized performance relative to Nifty 50 Index (Base 100)</p>
+            <div className="text-xs text-gray-500 mb-6 font-medium">Data Source: Transaction History</div>
+            {assets.length === 0 || transactions.length === 0 || benchmarkChartData.length === 0 ? (
               <div className="h-64 flex items-center justify-center">
                 <EmptyState 
                   icon="⚖️"
-                  title="No portfolio data available"
+                  title="No benchmark data available"
                   message="Add investments to compare with Nifty 50."
                 />
               </div>
@@ -1038,7 +1125,7 @@ export default function Dashboard() {
             {assets.length === 0 ? (
               <EmptyState 
                 icon="🛡️"
-                title="No investments found"
+                title="No historical performance available"
                 message="Risk analytics will appear after adding assets."
               />
             ) : concentrationAlerts.length === 0 ? (
@@ -1214,9 +1301,32 @@ export default function Dashboard() {
                     required
                     placeholder="e.g. INFY, TCS"
                     value={newTxForm.assetName}
-                    onChange={(e) => setNewTxForm({ ...newTxForm, assetName: e.target.value })}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewTxForm({ ...newTxForm, assetName: val });
+                      if (isNameInvalid(val)) {
+                        setTxErrors((prev) => ({
+                          ...prev,
+                          assetName: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+                        }));
+                      } else {
+                        setTxErrors((prev) => ({ ...prev, assetName: "" }));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = e.target.value;
+                      if (isNameInvalid(val)) {
+                        setTxErrors((prev) => ({
+                          ...prev,
+                          assetName: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+                        }));
+                      } else {
+                        setTxErrors((prev) => ({ ...prev, assetName: "" }));
+                      }
+                    }}
+                    className={`w-full bg-gray-700 border rounded-lg p-2 text-white outline-none focus:ring-2 focus:ring-blue-500 ${txErrors.assetName ? "border-red-500" : "border-gray-600"}`}
                   />
+                  {txErrors.assetName && <span className="text-red-400 text-[10px] mt-1 block leading-tight">{txErrors.assetName}</span>}
                 </div>
                 <div>
                   <label className="block text-gray-400 text-xs font-semibold mb-1">Asset Type</label>
@@ -1311,7 +1421,12 @@ export default function Dashboard() {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-semibold transition cursor-pointer"
+                  disabled={isNameInvalid(newTxForm.assetName) || !!txErrors.assetName}
+                  className={`px-4 py-2 rounded font-semibold transition cursor-pointer ${
+                    (isNameInvalid(newTxForm.assetName) || !!txErrors.assetName)
+                      ? "bg-blue-600/50 text-gray-400 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-500 text-white"
+                  }`}
                 >
                   Log Transaction
                 </button>

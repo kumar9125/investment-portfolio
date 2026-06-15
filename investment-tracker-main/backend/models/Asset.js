@@ -15,7 +15,12 @@ const assetSchema = new mongoose.Schema({
     type: String,
     required: [true, "Asset name is required"],
     trim: true,
-    maxlength: [100, "Asset name cannot exceed 100 characters"]
+    validate: {
+      validator: function(v) {
+        return /^(?=.*[A-Za-z])[A-Za-z0-9\s&().'-]{2,100}$/.test(v);
+      },
+      message: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+    }
   },
   quantity: {
     type: Number,

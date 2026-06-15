@@ -8,8 +8,14 @@ const transactionSchema = new mongoose.Schema({
   },
   assetName: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, "Asset name is required"],
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return /^(?=.*[A-Za-z])[A-Za-z0-9\s&().'-]{2,100}$/.test(v);
+      },
+      message: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+    }
   },
   assetType: {
     type: String,

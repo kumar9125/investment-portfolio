@@ -132,7 +132,7 @@ exports.deleteAsset = async (req, res) => {
   }
 };
 
-// ✅ Get asset history (Simulated OHLC)
+// ✅ Get asset history (aggregated from transaction history)
 exports.getAssetHistory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -147,33 +147,49 @@ exports.getAssetHistory = async (req, res) => {
       return res.status(403).json({ message: "Not authorized to access this asset" });
     }
 
-    const days = 30; // Return a default 30-day timeframe
-    const historyData = [];
-    let currentPrice = asset.purchasePrice > 0 ? asset.purchasePrice : 100;
-    
-    // Start timestamp calculation (30 days ago)
-    let currentDate = new Date();
-    currentDate.setDate(currentDate.getDate() - days);
+    const transactions = await Transaction.find({
+      portfolio: asset.portfolio,
+      assetName: asset.name
+    }).sort({ date: 1 });
 
-    // Seed the algorithmic random walk
-    for (let i = 0; i < days; i++) {
-      const volatility = currentPrice * 0.03; // Real-world standard deviation parameter assumption 
-      const open = currentPrice + (Math.random() - 0.5) * volatility;
-      const high = open + Math.random() * volatility;
-      const low = open - Math.random() * volatility;
-      const close = low + Math.random() * (high - low);
+    if (transactions.length === 0) {
+      return res.json({
+        message: "No historical transaction data found",
+        history: []
+      });
+    }
+
+    // Group transactions by date (YYYY-MM-DD)
+    const groups = {};
+    for (const tx of transactions) {
+      const dateStr = new Date(tx.date).toISOString().split("T")[0];
+      if (!groups[dateStr]) {
+        groups[dateStr] = [];
+      }
+      groups[dateStr].push(tx);
+    }
+
+    const historyData = [];
+    const sortedDates = Object.keys(groups).sort();
+
+    for (const dateStr of sortedDates) {
+      const txs = groups[dateStr];
+      txs.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      const prices = txs.map(t => t.price);
+      const open = txs[0].price;
+      const close = txs[txs.length - 1].price;
+      const high = Math.max(...prices);
+      const low = Math.min(...prices);
       
       historyData.push({
-        x: new Date(currentDate).getTime(),
+        x: new Date(dateStr).getTime(),
         y: [Number(open.toFixed(2)), Number(high.toFixed(2)), Number(low.toFixed(2)), Number(close.toFixed(2))]
       });
-
-      currentPrice = close;
-      currentDate.setDate(currentDate.getDate() + 1);
     }
 
     res.json({
-      message: "Asset historical data generated successfully",
+      message: "Asset historical data fetched successfully from transaction ledger",
       history: historyData
     });
 

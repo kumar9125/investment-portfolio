@@ -53,24 +53,53 @@ export default function AssetForm({ onClose, asset }) {
     return 0;
   };
 
+  const isNameInvalid = (nameVal) => {
+    const trimmed = (nameVal || "").trim();
+    const nameRegex = /^(?=.*[A-Za-z])[A-Za-z0-9\s&().'-]{2,100}$/;
+    return !trimmed || !nameRegex.test(trimmed);
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "name" && value.length > 100) return;
     if ((name === "quantity" || name === "purchasePrice" || name === "currentPrice") && value.length > 18) return;
 
     setForm({ ...form, [name]: value });
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: "" });
+    if (name === "name") {
+      if (isNameInvalid(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          name: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+        }));
+      } else {
+        setErrors((prev) => ({ ...prev, name: "" }));
+      }
+    } else {
+      if (errors[name]) {
+        setErrors((prev) => ({ ...prev, [name]: "" }));
+      }
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    if (name === "name") {
+      if (isNameInvalid(value)) {
+        setErrors((prev) => ({
+          ...prev,
+          name: "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ()."
+        }));
+      } else {
+        setErrors((prev) => ({ ...prev, name: "" }));
+      }
     }
   };
 
   const validate = () => {
     const errors = {};
     const cleanName = form.name.replace(/<[^>]*>/g, "").trim();
-    if (!cleanName) {
-      errors.name = "Asset name is required";
-    } else if (cleanName.length > 100) {
-      errors.name = "Asset name cannot exceed 100 characters";
+    if (isNameInvalid(cleanName)) {
+      errors.name = "Asset name must contain at least one letter and may only include letters, numbers, spaces, -, ., &, ', and ().";
     }
 
     let maxQtyDecimals = 4;
@@ -226,6 +255,7 @@ export default function AssetForm({ onClose, asset }) {
             placeholder="Asset Name (e.g. RELIANCE, TCS)"
             value={form.name}
             onChange={handleChange}
+            onBlur={handleBlur}
             onPaste={handlePasteName}
             maxLength={100}
             className={`border p-2 rounded w-full bg-gray-700 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? "border-red-500" : "border-gray-600"}`}
@@ -293,7 +323,12 @@ export default function AssetForm({ onClose, asset }) {
         <div className="flex justify-end space-x-2 pt-2">
           <button
             type="submit"
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-semibold transition cursor-pointer"
+            disabled={isNameInvalid(form.name) || Object.values(errors).some(err => !!err)}
+            className={`px-4 py-2 rounded font-semibold transition cursor-pointer ${
+              (isNameInvalid(form.name) || Object.values(errors).some(err => !!err))
+                ? "bg-blue-600/50 text-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-500 text-white"
+            }`}
           >
             {asset ? "Update" : "Save"}
           </button>

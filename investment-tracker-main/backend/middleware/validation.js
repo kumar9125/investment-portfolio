@@ -142,20 +142,19 @@ exports.validateAsset = (req, res, next) => {
 
   let { type, name, quantity, purchasePrice, currentPrice } = req.body;
 
-  name = sanitizeString(name);
+  name = typeof name === "string" ? name.trim() : "";
   req.body.name = name;
+
+  const nameRegex = /^(?=.*[A-Za-z])[A-Za-z0-9\s&().'-]{2,100}$/;
+  if (!name || name.length < 2 || name.length > 100 || !nameRegex.test(name)) {
+    return res.status(400).json({ message: "Invalid asset name." });
+  }
 
   const allowedTypes = ["stock", "crypto", "bond", "real_estate", "other"];
   if (!type) {
     errors.type = "Asset type is required";
   } else if (!allowedTypes.includes(type)) {
     errors.type = "Invalid asset type";
-  }
-
-  if (!name) {
-    errors.name = "Asset name is required";
-  } else if (name.length > 100) {
-    errors.name = "Asset name cannot exceed 100 characters";
   }
 
   // Parse and validate numbers
@@ -220,6 +219,104 @@ exports.validateAsset = (req, res, next) => {
 
   if (Object.keys(errors).length > 0) {
     console.warn("[Validation Warning] Asset request validation failed:", errors);
+    return res.status(400).json({ errors });
+  }
+
+  next();
+};
+
+exports.validateTransaction = (req, res, next) => {
+  console.log("[Validation] Validating Transaction Request body.");
+  const errors = {};
+
+  let { portfolioId, assetName, assetType, type, quantity, price, fee, notes } = req.body;
+
+  assetName = typeof assetName === "string" ? assetName.trim() : "";
+  req.body.assetName = assetName;
+
+  const nameRegex = /^(?=.*[A-Za-z])[A-Za-z0-9\s&().'-]{2,100}$/;
+  if (!assetName || assetName.length < 2 || assetName.length > 100 || !nameRegex.test(assetName)) {
+    return res.status(400).json({ message: "Invalid asset name." });
+  }
+
+  const allowedAssetTypes = ["stock", "crypto", "bond", "real_estate", "other"];
+  if (!assetType) {
+    errors.assetType = "Asset type is required";
+  } else if (!allowedAssetTypes.includes(assetType)) {
+    errors.assetType = "Invalid asset type";
+  }
+
+  const allowedTypes = ["buy", "sell"];
+  if (!type) {
+    errors.type = "Transaction type is required";
+  } else if (!allowedTypes.includes(type)) {
+    errors.type = "Invalid transaction type";
+  }
+
+  quantity = Number(quantity);
+  price = Number(price);
+
+  if (isNaN(quantity) || !isFinite(quantity) || quantity <= 0) {
+    errors.quantity = "Quantity must be a positive number greater than 0";
+  } else if (quantity > 100000000) {
+    errors.quantity = "Quantity cannot exceed 100,000,000";
+  }
+
+  if (isNaN(price) || !isFinite(price) || price < 0) {
+    errors.price = "Price must be a positive number (>= 0)";
+  } else if (price > 10000000000) {
+    errors.price = "Price cannot exceed 10,000,000,000";
+  }
+
+  let maxQtyDecimals = 4;
+  let maxPriceDecimals = 2;
+
+  if (assetType === "crypto") {
+    maxQtyDecimals = 8;
+    maxPriceDecimals = 8;
+  } else if (assetType === "bond") {
+    maxQtyDecimals = 0;
+    maxPriceDecimals = 2;
+  } else if (assetType === "real_estate") {
+    maxQtyDecimals = 2;
+    maxPriceDecimals = 2;
+  }
+
+  if (!errors.quantity) {
+    if (countDecimals(quantity) > maxQtyDecimals) {
+      errors.quantity = `Quantity for ${assetType} cannot exceed ${maxQtyDecimals} decimal places`;
+    } else {
+      req.body.quantity = parseFloat(quantity.toFixed(maxQtyDecimals));
+    }
+  }
+
+  if (!errors.price) {
+    if (countDecimals(price) > maxPriceDecimals) {
+      errors.price = `Price for ${assetType} cannot exceed ${maxPriceDecimals} decimal places`;
+    } else {
+      req.body.price = parseFloat(price.toFixed(maxPriceDecimals));
+    }
+  }
+
+  if (fee !== undefined && fee !== "") {
+    fee = Number(fee);
+    if (isNaN(fee) || !isFinite(fee) || fee < 0) {
+      errors.fee = "Fee must be a positive number (>= 0)";
+    } else if (fee > 10000000) {
+      errors.fee = "Fee cannot exceed 10,00,000";
+    } else if (countDecimals(fee) > maxPriceDecimals) {
+      errors.fee = `Fee for ${assetType} cannot exceed ${maxPriceDecimals} decimal places`;
+    } else {
+      req.body.fee = parseFloat(fee.toFixed(maxPriceDecimals));
+    }
+  }
+
+  if (notes !== undefined) {
+    req.body.notes = sanitizeString(notes).substring(0, 200);
+  }
+
+  if (Object.keys(errors).length > 0) {
+    console.warn("[Validation Warning] Transaction request validation failed:", errors);
     return res.status(400).json({ errors });
   }
 
