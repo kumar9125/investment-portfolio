@@ -2,10 +2,27 @@ const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const nameRegex = /^[a-zA-Z]+( [a-zA-Z]+)*$/;
 
+// Blacklist of weak passwords commonly guessed
+const passwordBlacklist = [
+  "password123", "admin123", "qwerty123", "portfolio123",
+  "welcome123", "password@123", "12345678", "letmein123",
+  "portfolio@123", "investment123", "groww1234", "zerodha123"
+];
+
 // Simple sanitization helper to strip HTML tags
 const sanitizeString = (str) => {
   if (typeof str !== "string") return "";
   return str.replace(/<[^>]*>/g, "").trim();
+};
+
+// Helper to check decimal digits length
+const countDecimals = (num) => {
+  if (Math.floor(num) === num) return 0;
+  const str = num.toString();
+  if (str.includes(".")) {
+    return str.split(".")[1].length;
+  }
+  return 0;
 };
 
 exports.validateSignup = (req, res, next) => {
@@ -46,6 +63,8 @@ exports.validateSignup = (req, res, next) => {
     errors.password = "Password is required";
   } else if (password.length < 8) {
     errors.password = "Password must be at least 8 characters long";
+  } else if (passwordBlacklist.includes(password.toLowerCase())) {
+    errors.password = "This password is too common and easily guessed. Please use a stronger password.";
   } else if (!passwordRegex.test(password)) {
     errors.password = "Password must include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&)";
   }
@@ -141,32 +160,61 @@ exports.validateAsset = (req, res, next) => {
 
   // Parse and validate numbers
   quantity = Number(quantity);
-  if (isNaN(quantity) || quantity <= 0) {
+  purchasePrice = Number(purchasePrice);
+
+  if (isNaN(quantity) || !isFinite(quantity) || quantity <= 0) {
     errors.quantity = "Quantity must be a positive number greater than 0";
   } else if (quantity > 100000000) {
     errors.quantity = "Quantity cannot exceed 100,000,000";
-  } else {
-    // Limit to 4 decimal places
-    req.body.quantity = parseFloat(quantity.toFixed(4));
   }
 
-  purchasePrice = Number(purchasePrice);
-  if (isNaN(purchasePrice) || purchasePrice < 0) {
+  if (isNaN(purchasePrice) || !isFinite(purchasePrice) || purchasePrice < 0) {
     errors.purchasePrice = "Purchase price must be a positive number (>= 0)";
   } else if (purchasePrice > 10000000000) {
     errors.purchasePrice = "Purchase price cannot exceed 10,000,000,000";
-  } else {
-    req.body.purchasePrice = parseFloat(purchasePrice.toFixed(2));
+  }
+
+  // Asset type specific decimal rules
+  let maxQtyDecimals = 4;
+  let maxPriceDecimals = 2;
+
+  if (type === "crypto") {
+    maxQtyDecimals = 8;
+    maxPriceDecimals = 8;
+  } else if (type === "bond") {
+    maxQtyDecimals = 0;
+    maxPriceDecimals = 2;
+  } else if (type === "real_estate") {
+    maxQtyDecimals = 2;
+    maxPriceDecimals = 2;
+  }
+
+  if (!errors.quantity) {
+    if (countDecimals(quantity) > maxQtyDecimals) {
+      errors.quantity = `Quantity for ${type} cannot exceed ${maxQtyDecimals} decimal places`;
+    } else {
+      req.body.quantity = parseFloat(quantity.toFixed(maxQtyDecimals));
+    }
+  }
+
+  if (!errors.purchasePrice) {
+    if (countDecimals(purchasePrice) > maxPriceDecimals) {
+      errors.purchasePrice = `Purchase price for ${type} cannot exceed ${maxPriceDecimals} decimal places`;
+    } else {
+      req.body.purchasePrice = parseFloat(purchasePrice.toFixed(maxPriceDecimals));
+    }
   }
 
   if (currentPrice !== undefined && currentPrice !== "") {
     currentPrice = Number(currentPrice);
-    if (isNaN(currentPrice) || currentPrice < 0) {
+    if (isNaN(currentPrice) || !isFinite(currentPrice) || currentPrice < 0) {
       errors.currentPrice = "Current price must be a positive number (>= 0)";
     } else if (currentPrice > 10000000000) {
       errors.currentPrice = "Current price cannot exceed 10,000,000,000";
+    } else if (countDecimals(currentPrice) > maxPriceDecimals) {
+      errors.currentPrice = `Current price for ${type} cannot exceed ${maxPriceDecimals} decimal places`;
     } else {
-      req.body.currentPrice = parseFloat(currentPrice.toFixed(2));
+      req.body.currentPrice = parseFloat(currentPrice.toFixed(maxPriceDecimals));
     }
   }
 

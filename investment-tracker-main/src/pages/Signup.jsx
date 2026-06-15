@@ -3,6 +3,12 @@ import { useDispatch, useSelector } from "react-redux";
 import { signupUser } from "../redux/slices/authSlice";
 import { useNavigate } from "react-router-dom";
 
+const passwordBlacklist = [
+  "password123", "admin123", "qwerty123", "portfolio123",
+  "welcome123", "password@123", "12345678", "letmein123",
+  "portfolio@123", "investment123", "groww1234", "zerodha123"
+];
+
 const Signup = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -15,6 +21,24 @@ const Signup = () => {
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
+
+  const getPasswordStrength = (pwd) => {
+    if (!pwd) return { score: 0, label: "", color: "bg-gray-200" };
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[@$!%*?&]/.test(pwd)) score++;
+    
+    if (passwordBlacklist.includes(pwd.toLowerCase())) {
+      return { score: 1, label: "Weak (Common Password)", color: "bg-red-500" };
+    }
+
+    if (score <= 1) return { score: 1, label: "Weak", color: "bg-red-500" };
+    if (score === 2) return { score: 2, label: "Fair", color: "bg-orange-500" };
+    if (score === 3) return { score: 3, label: "Good", color: "bg-yellow-500" };
+    return { score: 4, label: "Strong", color: "bg-green-500" };
+  };
 
   const validate = (name, value) => {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -37,6 +61,7 @@ const Signup = () => {
     if (name === "password") {
       if (!value) error = "Password is required";
       else if (value.length < 8) error = "Password must be at least 8 characters long";
+      else if (passwordBlacklist.includes(value.toLowerCase())) error = "This password is too common. Please use a stronger password.";
       else if (!passwordRegex.test(value)) error = "Must contain 1 uppercase, 1 lowercase, 1 number & 1 special char";
     }
     return error;
@@ -45,12 +70,10 @@ const Signup = () => {
   const handleChange = (e) => {
     let { name, value } = e.target;
     if (name === "name") {
-      // Prevent numbers and special characters directly during typing
       value = value.replace(/[^a-zA-Z\s]/g, "");
     }
     setFormData({ ...formData, [name]: value });
     
-    // Clear error dynamically as the user types
     if (fieldErrors[name]) {
       setFieldErrors({ ...fieldErrors, [name]: "" });
     }
@@ -62,11 +85,18 @@ const Signup = () => {
     setFieldErrors((prev) => ({ ...prev, [name]: error }));
   };
 
+  const handlePasteName = (e) => {
+    const text = e.clipboardData.getData("text");
+    if (/[^a-zA-Z\s]/.test(text)) {
+      e.preventDefault();
+      alert("Name field can only contain letters and spaces.");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("[Signup Page] Submit button clicked. Form data:", { ...formData, password: "[REDACTED]" });
 
-    // Validate all fields
     const errors = {};
     Object.keys(formData).forEach((key) => {
       const err = validate(key, formData[key]);
@@ -94,6 +124,7 @@ const Signup = () => {
     }
   };
 
+  const strength = getPasswordStrength(formData.password);
   const hasErrors = Object.values(fieldErrors).some((err) => !!err);
 
   return (
@@ -116,6 +147,8 @@ const Signup = () => {
               value={formData.name}
               onChange={handleChange}
               onBlur={handleBlur}
+              onPaste={handlePasteName}
+              maxLength={50}
               className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.name ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
               autoComplete="name"
               required
@@ -131,6 +164,7 @@ const Signup = () => {
               value={formData.email}
               onChange={handleChange}
               onBlur={handleBlur}
+              maxLength={254}
               className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.email ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
               autoComplete="username"
               required
@@ -147,11 +181,28 @@ const Signup = () => {
               value={formData.password}
               onChange={handleChange}
               onBlur={handleBlur}
+              maxLength={128}
               className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.password ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
               autoComplete="new-password"
               required
             />
             {fieldErrors.password && <span className="text-red-500 text-xs mt-1 pl-1 font-medium">{fieldErrors.password}</span>}
+            
+            {/* Password Strength Meter */}
+            {formData.password && (
+              <div className="mt-2 pl-1">
+                <div className="flex justify-between items-center text-xs mb-1 font-semibold text-gray-600">
+                  <span>Password Strength:</span>
+                  <span className={`${strength.color.replace("bg-", "text-")}`}>{strength.label}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className={`h-full ${strength.color} transition-all duration-300`} 
+                    style={{ width: `${(strength.score / 4) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
           </div>
 
           <button

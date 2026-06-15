@@ -22,6 +22,14 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
     }
   }, [existingPortfolio]);
 
+  const handlePasteText = (e) => {
+    const text = e.clipboardData.getData("text");
+    if (/<[^>]*>/g.test(text)) {
+      e.preventDefault();
+      alert("HTML tags are not allowed.");
+    }
+  };
+
   const validate = () => {
     const errors = {};
     const cleanName = name.replace(/<[^>]*>/g, "").trim();
@@ -80,6 +88,8 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onPaste={handlePasteText}
+          maxLength={100}
           className={`w-full bg-gray-700 border rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? "border-red-500" : "border-gray-600"}`}
           required
         />
@@ -92,6 +102,8 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          onPaste={handlePasteText}
+          maxLength={500}
           className={`w-full bg-gray-700 border rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px] ${errors.description ? "border-red-500" : "border-gray-600"}`}
           placeholder="(Optional)"
         />

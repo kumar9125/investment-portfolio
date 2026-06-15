@@ -61,17 +61,31 @@ export default function Dashboard() {
   };
 
   // Derived Metrics
-  const totalValue = assets.reduce((sum, a) => sum + (a.currentPrice * a.quantity), 0);
-  const totalCost = assets.reduce((sum, a) => sum + (a.purchasePrice * a.quantity), 0);
-  const totalProfit = totalValue - totalCost;
-  const profitPercentage = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+  const totalValue = assets.reduce((sum, a) => {
+    const currentPrice = typeof a.currentPrice === "number" && isFinite(a.currentPrice) ? a.currentPrice : 0;
+    const quantity = typeof a.quantity === "number" && isFinite(a.quantity) ? a.quantity : 0;
+    const val = currentPrice * quantity;
+    return sum + (isFinite(val) ? val : 0);
+  }, 0);
+
+  const totalCost = assets.reduce((sum, a) => {
+    const purchasePrice = typeof a.purchasePrice === "number" && isFinite(a.purchasePrice) ? a.purchasePrice : 0;
+    const quantity = typeof a.quantity === "number" && isFinite(a.quantity) ? a.quantity : 0;
+    const cost = purchasePrice * quantity;
+    return sum + (isFinite(cost) ? cost : 0);
+  }, 0);
+
+  const totalProfit = isFinite(totalValue - totalCost) ? totalValue - totalCost : 0;
+  const profitPercentage = totalCost > 0 && isFinite(totalProfit / totalCost) ? (totalProfit / totalCost) * 100 : 0;
   
   // Find top gainer
   let topGainer = null;
   let maxGain = -Infinity;
   assets.forEach(a => {
-    const gain = a.currentPrice - a.purchasePrice;
-    if (gain > maxGain) {
+    const currentPrice = typeof a.currentPrice === "number" && isFinite(a.currentPrice) ? a.currentPrice : 0;
+    const purchasePrice = typeof a.purchasePrice === "number" && isFinite(a.purchasePrice) ? a.purchasePrice : 0;
+    const gain = currentPrice - purchasePrice;
+    if (isFinite(gain) && gain > maxGain) {
       maxGain = gain;
       topGainer = a;
     }

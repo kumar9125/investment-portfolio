@@ -37,10 +37,30 @@ export default function AssetForm({ onClose, asset }) {
     setErrors({});
   }, [asset, selectedPortfolioId]);
 
+  const countDecimals = (val) => {
+    const str = String(val).trim();
+    if (!str) return 0;
+    const num = Number(str);
+    if (isNaN(num)) return 0;
+    if (Math.floor(num) === num) return 0;
+    if (str.includes(".")) {
+      return str.split(".")[1].length;
+    }
+    const match = str.match(/e-(\d+)/);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+    return 0;
+  };
+
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    if (errors[e.target.name]) {
-      setErrors({ ...errors, [e.target.name]: "" });
+    const { name, value } = e.target;
+    if (name === "name" && value.length > 100) return;
+    if ((name === "quantity" || name === "purchasePrice" || name === "currentPrice") && value.length > 18) return;
+
+    setForm({ ...form, [name]: value });
+    if (errors[name]) {
+      setErrors({ ...errors, [name]: "" });
     }
   };
 
@@ -53,29 +73,72 @@ export default function AssetForm({ onClose, asset }) {
       errors.name = "Asset name cannot exceed 100 characters";
     }
 
-    const qty = Number(form.quantity);
-    if (isNaN(qty) || qty <= 0) {
+    let maxQtyDecimals = 4;
+    let maxPriceDecimals = 2;
+
+    if (form.type === "crypto") {
+      maxQtyDecimals = 8;
+      maxPriceDecimals = 8;
+    } else if (form.type === "bond") {
+      maxQtyDecimals = 0;
+      maxPriceDecimals = 2;
+    } else if (form.type === "real_estate") {
+      maxQtyDecimals = 2;
+      maxPriceDecimals = 2;
+    }
+
+    const qtyStr = String(form.quantity).trim();
+    const qty = Number(qtyStr);
+    if (!qtyStr) {
+      errors.quantity = "Quantity is required";
+    } else if (isNaN(qty) || qty <= 0) {
       errors.quantity = "Quantity must be greater than 0";
     } else if (qty > 100000000) {
       errors.quantity = "Quantity cannot exceed 100,000,000";
+    } else if (countDecimals(qtyStr) > maxQtyDecimals) {
+      errors.quantity = `Quantity for ${form.type} cannot exceed ${maxQtyDecimals} decimal places`;
     }
 
-    const pPrice = Number(form.purchasePrice);
-    if (isNaN(pPrice) || pPrice < 0) {
+    const pPriceStr = String(form.purchasePrice).trim();
+    const pPrice = Number(pPriceStr);
+    if (!pPriceStr) {
+      errors.purchasePrice = "Purchase price is required";
+    } else if (isNaN(pPrice) || pPrice < 0) {
       errors.purchasePrice = "Purchase price cannot be negative";
     } else if (pPrice > 10000000000) {
       errors.purchasePrice = "Purchase price cannot exceed 10,000,000,000";
+    } else if (countDecimals(pPriceStr) > maxPriceDecimals) {
+      errors.purchasePrice = `Purchase price for ${form.type} cannot exceed ${maxPriceDecimals} decimal places`;
     }
 
-    if (form.currentPrice !== undefined && form.currentPrice !== "") {
-      const cPrice = Number(form.currentPrice);
+    if (form.currentPrice !== undefined && String(form.currentPrice).trim() !== "") {
+      const cPriceStr = String(form.currentPrice).trim();
+      const cPrice = Number(cPriceStr);
       if (isNaN(cPrice) || cPrice < 0) {
         errors.currentPrice = "Current price cannot be negative";
       } else if (cPrice > 10000000000) {
         errors.currentPrice = "Current price cannot exceed 10,000,000,000";
+      } else if (countDecimals(cPriceStr) > maxPriceDecimals) {
+        errors.currentPrice = `Current price for ${form.type} cannot exceed ${maxPriceDecimals} decimal places`;
       }
     }
     return errors;
+  };
+
+  const handlePasteName = (e) => {
+    const text = e.clipboardData.getData("text");
+    if (/<[^>]*>/g.test(text)) {
+      e.preventDefault();
+      alert("HTML tags are not allowed in asset name.");
+    }
+  };
+
+  const handlePasteNumeric = (e) => {
+    const text = e.clipboardData.getData("text");
+    if (!/^\d*(\.\d*)?$/.test(text)) {
+      e.preventDefault();
+      alert("Please paste a valid positive number.");
+    }
   };
 
   const handleSubmit = (e) => {
@@ -93,9 +156,26 @@ export default function AssetForm({ onClose, asset }) {
 
     // Normalize values
     const cleanName = form.name.replace(/<[^>]*>/g, "").trim();
-    const qty = parseFloat(Number(form.quantity).toFixed(4));
-    const pPrice = parseFloat(Number(form.purchasePrice).toFixed(2));
-    const cPrice = form.currentPrice !== "" ? parseFloat(Number(form.currentPrice).toFixed(2)) : undefined;
+
+    let maxQtyDecimals = 4;
+    let maxPriceDecimals = 2;
+
+    if (form.type === "crypto") {
+      maxQtyDecimals = 8;
+      maxPriceDecimals = 8;
+    } else if (form.type === "bond") {
+      maxQtyDecimals = 0;
+      maxPriceDecimals = 2;
+    } else if (form.type === "real_estate") {
+      maxQtyDecimals = 2;
+      maxPriceDecimals = 2;
+    }
+
+    const qty = parseFloat(Number(form.quantity).toFixed(maxQtyDecimals));
+    const pPrice = parseFloat(Number(form.purchasePrice).toFixed(maxPriceDecimals));
+    const cPrice = form.currentPrice !== "" && form.currentPrice !== undefined
+      ? parseFloat(Number(form.currentPrice).toFixed(maxPriceDecimals))
+      : undefined;
 
     const submissionData = {
       ...form,
@@ -146,6 +226,8 @@ export default function AssetForm({ onClose, asset }) {
             placeholder="Asset Name (e.g. RELIANCE, TCS)"
             value={form.name}
             onChange={handleChange}
+            onPaste={handlePasteName}
+            maxLength={100}
             className={`border p-2 rounded w-full bg-gray-700 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? "border-red-500" : "border-gray-600"}`}
             required
           />
@@ -163,6 +245,8 @@ export default function AssetForm({ onClose, asset }) {
             placeholder="Quantity"
             value={form.quantity}
             onChange={handleChange}
+            onPaste={handlePasteNumeric}
+            maxLength={18}
             className={`border p-2 rounded w-full bg-gray-700 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.quantity ? "border-red-500" : "border-gray-600"}`}
             required
           />
@@ -174,12 +258,14 @@ export default function AssetForm({ onClose, asset }) {
           <label className="block text-gray-300 text-sm font-semibold mb-1">Purchase Price (₹)</label>
           <input
             type="number"
-            step="0.01"
+            step="any"
             min="0"
             name="purchasePrice"
             placeholder="Purchase Price in INR"
             value={form.purchasePrice}
             onChange={handleChange}
+            onPaste={handlePasteNumeric}
+            maxLength={18}
             className={`border p-2 rounded w-full bg-gray-700 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.purchasePrice ? "border-red-500" : "border-gray-600"}`}
             required
           />
@@ -191,12 +277,14 @@ export default function AssetForm({ onClose, asset }) {
           <label className="block text-gray-300 text-sm font-semibold mb-1">Current Price (₹ - Optional)</label>
           <input
             type="number"
-            step="0.01"
+            step="any"
             min="0"
             name="currentPrice"
             placeholder="Current Price in INR"
             value={form.currentPrice}
             onChange={handleChange}
+            onPaste={handlePasteNumeric}
+            maxLength={18}
             className={`border p-2 rounded w-full bg-gray-700 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.currentPrice ? "border-red-500" : "border-gray-600"}`}
           />
           {errors.currentPrice && <span className="text-red-400 text-xs mt-1 block">{errors.currentPrice}</span>}

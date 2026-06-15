@@ -105,6 +105,7 @@ const Login = () => {
               value={formData.email}
               onChange={handleChange}
               onBlur={handleBlur}
+              maxLength={254}
               className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.email ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
               autoComplete="username"
               required
@@ -121,6 +122,7 @@ const Login = () => {
               value={formData.password}
               onChange={handleChange}
               onBlur={handleBlur}
+              maxLength={128}
               className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.password ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
               autoComplete="current-password"
               required
