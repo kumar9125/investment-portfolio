@@ -10,6 +10,8 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const portfolioRoutes = require("./routes/portfolioRoutes");
 const assetRoutes = require("./routes/assetRoutes");
+const transactionRoutes = require("./routes/transactionRoutes");
+const watchlistRoutes = require("./routes/watchlistRoutes");
 
 const app = express();
 
@@ -130,6 +132,12 @@ app.use("/api/portfolio", portfolioRoutes);
 
 app.use("/assets", assetRoutes);
 app.use("/api/assets", assetRoutes);
+
+app.use("/transactions", transactionRoutes);
+app.use("/api/transactions", transactionRoutes);
+
+app.use("/watchlist", watchlistRoutes);
+app.use("/api/watchlist", watchlistRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

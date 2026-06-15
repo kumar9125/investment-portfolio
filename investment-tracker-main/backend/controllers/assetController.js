@@ -1,5 +1,6 @@
 const Asset = require("../models/Asset");
 const Portfolio = require("../models/Portfolio");
+const Transaction = require("../models/Transaction");
 
 // ✅ Add asset to a portfolio
 exports.addAsset = async (req, res) => {
@@ -29,6 +30,18 @@ exports.addAsset = async (req, res) => {
       quantity,
       purchasePrice,
       currentPrice: currentPrice || 0
+    });
+
+    // Auto-create initial buy transaction
+    await Transaction.create({
+      portfolio: selectedPortfolio._id,
+      assetName: name,
+      assetType: type,
+      type: "buy",
+      quantity,
+      price: purchasePrice,
+      fee: 0,
+      notes: "Initial holding purchase entry"
     });
 
     res.status(201).json({
@@ -110,7 +123,10 @@ exports.deleteAsset = async (req, res) => {
     }
 
     await Asset.findByIdAndDelete(id);
-    res.json({ message: "Asset deleted successfully" });
+    // Delete all transactions for this asset in this portfolio
+    await Transaction.deleteMany({ portfolio: asset.portfolio, assetName: asset.name });
+
+    res.json({ message: "Asset and associated transactions deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
