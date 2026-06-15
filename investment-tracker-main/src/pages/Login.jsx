@@ -18,11 +18,15 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("[Login Page] Submit button clicked. Form data:", { ...formData, password: "[REDACTED]" });
     try {
-      await dispatch(loginUser(formData)).unwrap();
+      console.log("[Login Page] Dispatching loginUser action...");
+      const result = await dispatch(loginUser(formData)).unwrap();
+      console.log("[Login Page] loginUser resolved successfully. Payload returned:", result);
+      console.log("[Login Page] Redirecting user to /dashboard...");
       navigate("/dashboard");
     } catch (err) {
-      console.error("Login failed:", err);
+      console.error("❌ [Login Page] Login error caught in component:", err);
     }
   };
 

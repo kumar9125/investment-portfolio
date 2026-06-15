@@ -3,24 +3,54 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const morgan = require("morgan");
 
+// ── Load env vars FIRST before anything else reads them ──────────────────────
+dotenv.config();
+
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const portfolioRoutes = require("./routes/portfolioRoutes");
 const assetRoutes = require("./routes/assetRoutes");
 
-// ── Load env vars FIRST before anything else reads them ──────────────────────
-dotenv.config();
-
-// ── Connect to MongoDB ────────────────────────────────────────────────────────
-connectDB();
-
 const app = express();
+
+const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const FRONTEND_URL = process.env.FRONTEND_URL;
+
+console.log("=========================================");
+console.log("BACKEND CONFIGURATION DETAILS:");
+console.log(`- PORT: ${PORT}`);
+console.log(`- NODE_ENV: ${NODE_ENV}`);
+console.log(`- FRONTEND_URL: ${FRONTEND_URL}`);
+console.log("=========================================");
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 // CORS must run before body parsing and routes so preflight OPTIONS requests succeed.
+const allowedOrigins = [
+  FRONTEND_URL,
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:5000"
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: "https://investment-portfolio-1.onrender.com",
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl, or postman)
+      if (!origin) return callback(null, true);
+      
+      // Allow any localhost origin
+      if (origin.startsWith("http://localhost:")) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.indexOf(origin) !== -1 || origin === FRONTEND_URL) {
+        return callback(null, true);
+      } else {
+        console.warn(`[CORS Blocked] Origin: ${origin} not in allowed origins list.`);
+        return callback(new Error("Not allowed by CORS"), false);
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -31,27 +61,52 @@ app.use(
 app.use(express.json());
 
 // ── HTTP request logging (dev only) ──────────────────────────────────────────
-if (process.env.NODE_ENV !== "production") {
+if (NODE_ENV !== "production") {
   app.use(morgan("dev"));
+} else {
+  // Simple custom logger for requests in production to track routes being hit
+  app.use((req, res, next) => {
+    console.log(`[Request] ${req.method} ${req.originalUrl}`);
+    next();
+  });
 }
 
-// ── Health check / root route (required by Render) ───────────────────────────
+// ── Health check / root route ────────────────────────────────────────────────
 app.get("/", (req, res) => {
-  res.send("Investment Portfolio Backend is running!");
+  res.send("API is running");
 });
 
 // ── API Routes ────────────────────────────────────────────────────────────────
+// Support both standard prefix and API prefix for robust client integration
+app.use("/auth", authRoutes);
 app.use("/api/auth", authRoutes);
+
+app.use("/portfolio", portfolioRoutes);
 app.use("/api/portfolio", portfolioRoutes);
+
+app.use("/assets", assetRoutes);
 app.use("/api/assets", assetRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
+  console.log(`[404 Not Found] ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: "Route Not Found" });
 });
 
-// ── Start server ──────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running in ${process.env.NODE_ENV || "development"} mode on port ${PORT}`);
-});
+// ── Start server after MongoDB connects ───────────────────────────────────────
+const startServer = async () => {
+  try {
+    console.log("Connecting to MongoDB...");
+    await connectDB();
+    console.log("MongoDB connection function completed.");
+    app.listen(PORT, () => {
+      console.log(`✅ Server running in ${NODE_ENV} mode on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
+};
+
+startServer();
+

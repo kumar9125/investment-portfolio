@@ -24,9 +24,14 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("[Signup Page] Submit button clicked. Form data:", { ...formData, password: "[REDACTED]" });
+    console.log("[Signup Page] Dispatching signupUser action...");
     const result = await dispatch(signupUser(formData));
     if (signupUser.fulfilled.match(result)) {
+      console.log("[Signup Page] signupUser action completed successfully. Redirecting user to /login...");
       navigate("/login");
+    } else {
+      console.error("[Signup Page] signupUser action failed. Result payload:", result.payload);
     }
   };
 
