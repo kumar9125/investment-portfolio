@@ -26,34 +26,26 @@ console.log("=========================================");
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 // CORS must run before body parsing and routes so preflight OPTIONS requests succeed.
-const allowedOrigins = [
-  FRONTEND_URL,
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:5000"
-].filter(Boolean);
-
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps, curl, or postman)
+      const allowedOrigins = [
+        process.env.FRONTEND_URL,
+        "http://localhost:5173",
+        "https://investment-portfolio-1.onrender.com",
+      ];
+
       if (!origin) return callback(null, true);
-      
-      // Allow any localhost origin
-      if (origin.startsWith("http://localhost:")) {
+
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
-      if (allowedOrigins.indexOf(origin) !== -1 || origin === FRONTEND_URL) {
-        return callback(null, true);
-      } else {
-        console.warn(`[CORS Blocked] Origin: ${origin} not in allowed origins list.`);
-        return callback(new Error("Not allowed by CORS"), false);
-      }
+      return callback(
+        new Error(`CORS blocked for origin: ${origin}`)
+      );
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
