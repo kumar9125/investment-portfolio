@@ -46,8 +46,9 @@ exports.updatePortfolio = async (req, res) => {
 // ✅ Delete portfolio
 exports.deletePortfolio = async (req, res) => {
   try {
+    const portfolioId = req.params.id;
     const portfolio = await Portfolio.findOneAndDelete({
-      _id: req.params.id,
+      _id: portfolioId,
       user: req.user._id,
     });
 
@@ -55,7 +56,11 @@ exports.deletePortfolio = async (req, res) => {
       return res.status(404).json({ message: "Portfolio not found or not authorized" });
     }
 
-    res.json({ message: "Portfolio deleted successfully" });
+    // Cascade delete assets and transactions associated with this portfolio
+    await require("../models/Asset").deleteMany({ portfolio: portfolioId });
+    await require("../models/Transaction").deleteMany({ portfolio: portfolioId });
+
+    res.json({ message: "Portfolio and all associated holdings and transactions deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

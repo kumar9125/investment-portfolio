@@ -14,6 +14,7 @@ export default function DashBoardLayout() {
   const navItems = [
     { path: "/dashboard", icon: "📊", label: "Dashboard" },
     { path: "/portfolios", icon: "📁", label: "Portfolio" },
+    { path: "/settings", icon: "⚙️", label: "Settings" },
   ];
 
   useEffect(() => {

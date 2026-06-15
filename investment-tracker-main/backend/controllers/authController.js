@@ -135,3 +135,32 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// @desc    Delete logged in user account and cascade delete all their data
+exports.deleteMe = async (req, res) => {
+  console.log("[deleteMe] Account deletion requested for User ID:", req.user?._id);
+  try {
+    const userId = req.user._id;
+
+    // Find all portfolios owned by this user
+    const portfolios = await require("../models/Portfolio").find({ user: userId });
+    const portfolioIds = portfolios.map(p => p._id);
+
+    // Delete all transactions, assets, and portfolios
+    await require("../models/Transaction").deleteMany({ portfolio: { $in: portfolioIds } });
+    await require("../models/Asset").deleteMany({ portfolio: { $in: portfolioIds } });
+    await require("../models/Portfolio").deleteMany({ user: userId });
+
+    // Delete watchlists
+    await require("../models/Watchlist").deleteMany({ user: userId });
+
+    // Delete the User document
+    await User.findByIdAndDelete(userId);
+
+    console.log(`[deleteMe] Account and all data deleted successfully for User ID: ${userId}`);
+    res.json({ message: "Account deleted successfully" });
+  } catch (error) {
+    console.error("❌ [deleteMe] Exception caught:", error.message);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};

@@ -1,5 +1,5 @@
 const express = require("express");
-const { signup, login, getMe } = require("../controllers/authController");
+const { signup, login, getMe, deleteMe } = require("../controllers/authController");
 const { protect } = require("../middleware/auth");
 const { validateSignup, validateLogin } = require("../middleware/validation");
 
@@ -13,5 +13,8 @@ router.post("/login", validateLogin, login);
 
 //  Get current logged in user
 router.get("/me", protect, getMe);
+
+//  Delete user account
+router.delete("/me", protect, deleteMe);
 
 module.exports = router;
