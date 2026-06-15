@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchPortfolios } from "../redux/slices/portfolioSlice";
 import { fetchAssets, deleteAsset, fetchAssetHistory } from "../redux/slices/assetsSlice";
 import AssetForm from "../components/AssetForm";
+import EmptyState from "../components/EmptyState";
 import Chart from "react-apexcharts";
 import axiosInstance from "../api/axios";
 import { jsPDF } from "jspdf";
@@ -25,7 +26,7 @@ export default function Dashboard() {
   const [chartType, setChartType] = useState('candlestick');
   const [selectedAssetForChart, setSelectedAssetForChart] = useState(null);
 
-  // New Upgrade State Variables
+  // Upgrade State Variables
   const [activeTab, setActiveTab] = useState("overview"); // "overview", "transactions", "analytics", "watchlist"
   const [transactions, setTransactions] = useState([]);
   const [txLoading, setTxLoading] = useState(false);
@@ -41,7 +42,7 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState("name"); // "name", "value", "profit", "qty"
   const [sortOrder, setSortOrder] = useState("asc");
 
-  // New Transaction Form state
+  // Transaction Form state
   const [newTxForm, setNewTxForm] = useState({
     assetName: "",
     assetType: "stock",
@@ -53,7 +54,7 @@ export default function Dashboard() {
     notes: ""
   });
 
-  // New Watchlist Form state
+  // Watchlist Form state
   const [newWatchlistForm, setNewWatchlistForm] = useState({
     symbol: "",
     name: "",
@@ -203,31 +204,6 @@ export default function Dashboard() {
     return isFinite(realized) ? realized : 0;
   }, [transactions]);
 
-  // Top Gainer and Performer
-  const topGainer = useMemo(() => {
-    let topG = null;
-    let maxGain = -Infinity;
-    assets.forEach((a) => {
-      const gain = a.currentPrice - a.purchasePrice;
-      if (isFinite(gain) && gain > maxGain) {
-        maxGain = gain;
-        topG = a;
-      }
-    });
-    return topG;
-  }, [assets]);
-
-  // Simulated Day Change (industry standard mock)
-  const dayChangeValue = useMemo(() => {
-    return assets.reduce((sum, a) => {
-      const hash = a.name.charCodeAt(0) % 5;
-      const pct = (hash - 2) * 0.005; // -1% to +1% change
-      return sum + (a.currentPrice * a.quantity * pct);
-    }, 0);
-  }, [assets]);
-  
-  const dayChangePercentage = totalValue > 0 ? (dayChangeValue / totalValue) * 100 : 0;
-
   // Search, Filter & Sort Holdings
   const filteredAssets = useMemo(() => {
     return assets
@@ -269,6 +245,7 @@ export default function Dashboard() {
   }, [assets]);
 
   const concentrationAlerts = useMemo(() => {
+    if (assets.length === 0) return [];
     const alerts = [];
     assets.forEach(a => {
       const val = a.currentPrice * a.quantity;
@@ -327,25 +304,23 @@ export default function Dashboard() {
     }
   };
 
-  // Benchmark return simulation
+  // Benchmark return - strictly deterministic growth curve
   const benchmarkChartData = useMemo(() => {
+    if (assets.length === 0) return [];
     const portfolioReturnSeries = [];
     const niftySeries = [];
     let currentDate = new Date();
     currentDate.setDate(currentDate.getDate() - 30);
 
-    let portfolioCum = 100;
-    let niftyCum = 100;
+    const dailyReturnStep = profitPercentage / 30;
+    let portfolioBase = 100;
+    let niftyBase = 100;
 
     for (let i = 0; i < 30; i++) {
       const time = currentDate.getTime();
       
-      // Seed random walk comparisons
-      portfolioCum += (Math.random() - 0.45) * 1.5; 
-      niftyCum += (Math.random() - 0.48) * 1.2;
-
-      portfolioReturnSeries.push({ x: time, y: Number(portfolioCum.toFixed(2)) });
-      niftySeries.push({ x: time, y: Number(niftyCum.toFixed(2)) });
+      portfolioReturnSeries.push({ x: time, y: Number((portfolioBase + (dailyReturnStep * i)).toFixed(2)) });
+      niftySeries.push({ x: time, y: Number((niftyBase + (0.04 * i)).toFixed(2)) });
 
       currentDate.setDate(currentDate.getDate() + 1);
     }
@@ -354,7 +329,7 @@ export default function Dashboard() {
       { name: "Your Portfolio", data: portfolioReturnSeries },
       { name: "Nifty 50 Index (Bench)", data: niftySeries }
     ];
-  }, [assets]);
+  }, [assets, profitPercentage]);
 
   // Watchlist handlers
   const handleAddWatchlist = async (e) => {
@@ -591,7 +566,7 @@ export default function Dashboard() {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       setSortBy(field);
-      setSortOrder("desc"); // Default to desc for numeric, asc for name
+      setSortOrder("desc"); 
     }
   };
 
@@ -608,7 +583,7 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {selectedPortfolio && (
+          {selectedPortfolio && assets.length > 0 && (
             <button
               onClick={() => setShowExportModal(true)}
               className="bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-xl font-semibold shadow-lg transition flex items-center gap-2 cursor-pointer"
@@ -645,38 +620,38 @@ export default function Dashboard() {
         <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
           <h3 className="text-gray-400 font-semibold mb-1 text-sm">Portfolio Net Worth</h3>
           <p className="text-3xl font-bold text-white mb-2">₹{totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-          <span className="text-xs text-gray-400">Total Invested: ₹{totalCost.toLocaleString('en-IN')}</span>
+          <span className="text-xs text-gray-400">Current market value</span>
+        </div>
+
+        {/* Invested Cost */}
+        <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
+          <h3 className="text-gray-400 font-semibold mb-1 text-sm">Total Invested Cost</h3>
+          <p className="text-3xl font-bold text-white mb-2">₹{totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <span className="text-xs text-gray-400">Total purchase value</span>
         </div>
 
         {/* Profit */}
         <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
           <h3 className="text-gray-400 font-semibold mb-1 text-sm">Total Profit / Loss</h3>
-          <p className={`text-3xl font-bold mb-2 ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {totalProfit >= 0 ? '+' : '-'}₹{Math.abs(totalProfit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <p className={`text-3xl font-bold mb-2 ${assets.length > 0 && totalProfit >= 0 ? 'text-green-400' : assets.length > 0 ? 'text-red-400' : 'text-white'}`}>
+            {assets.length > 0 ? (totalProfit >= 0 ? '+' : '-') : ''}₹{Math.abs(totalProfit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          <span className={`text-xs font-semibold ${profitPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {profitPercentage >= 0 ? '▲' : '▼'} {profitPercentage.toFixed(2)}% Overall
-          </span>
+          {assets.length > 0 ? (
+            <span className={`text-xs font-semibold ${profitPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {profitPercentage >= 0 ? '▲' : '▼'} {profitPercentage.toFixed(2)}% Overall
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500">No active return metrics</span>
+          )}
         </div>
 
         {/* Realized Profits */}
         <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
           <h3 className="text-gray-400 font-semibold mb-1 text-sm">Realized Capital Gains</h3>
-          <p className={`text-3xl font-bold mb-2 ${realizedGains >= 0 ? 'text-teal-400' : 'text-red-400'}`}>
+          <p className={`text-3xl font-bold mb-2 ${assets.length > 0 && realizedGains >= 0 ? 'text-teal-400' : assets.length > 0 ? 'text-red-400' : 'text-white'}`}>
             ₹{realizedGains.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <span className="text-xs text-gray-400">Net of fees and sell events</span>
-        </div>
-
-        {/* Daily Return */}
-        <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
-          <h3 className="text-gray-400 font-semibold mb-1 text-sm">Day's Return</h3>
-          <p className={`text-3xl font-bold mb-2 ${dayChangeValue >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {dayChangeValue >= 0 ? '+' : '-'}₹{Math.abs(dayChangeValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <span className={`text-xs font-semibold ${dayChangePercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {dayChangePercentage >= 0 ? '▲' : '▼'} {dayChangePercentage.toFixed(2)}% Today
-          </span>
         </div>
       </div>
 
@@ -717,23 +692,25 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
               <div>
                 <h2 className="text-xl font-bold text-white">Asset Performance</h2>
-                <p className="text-gray-400 text-sm">30-day simulated historical chart</p>
+                <p className="text-gray-400 text-sm">30-day historical chart</p>
               </div>
 
-              <div className="flex bg-gray-700 rounded-lg p-1">
-                <button 
-                  className={`px-4 py-2 rounded-md font-medium transition cursor-pointer ${chartType === 'candlestick' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
-                  onClick={() => setChartType('candlestick')}
-                >
-                  Candlestick
-                </button>
-                <button 
-                  className={`px-4 py-2 rounded-md font-medium transition cursor-pointer ${chartType === 'line' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
-                  onClick={() => setChartType('line')}
-                >
-                  Line
-                </button>
-              </div>
+              {assets.length > 0 && (
+                <div className="flex bg-gray-700 rounded-lg p-1">
+                  <button 
+                    className={`px-4 py-2 rounded-md font-medium transition cursor-pointer ${chartType === 'candlestick' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
+                    onClick={() => setChartType('candlestick')}
+                  >
+                    Candlestick
+                  </button>
+                  <button 
+                    className={`px-4 py-2 rounded-md font-medium transition cursor-pointer ${chartType === 'line' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
+                    onClick={() => setChartType('line')}
+                  >
+                    Line
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="w-full h-80 relative">
@@ -742,9 +719,13 @@ export default function Dashboard() {
                    <span className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
                  </div>
               ) : assets.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500 text-lg">
-                  No assets in this portfolio. Add one below to see the chart!
-                </div>
+                <EmptyState 
+                  icon="📈"
+                  title="No Chart Performance Data"
+                  message="Add holdings to this portfolio to visualize historical asset metrics."
+                  actionText="Add Investment"
+                  onAction={() => setShowModal(true)}
+                />
               ) : !selectedAssetForChart ? (
                 <div className="flex items-center justify-center h-full text-gray-500 text-lg">
                   Select an asset from the table below to view its chart.
@@ -802,92 +783,104 @@ export default function Dashboard() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-900/50 text-gray-400 text-xs uppercase tracking-wider">
-                    <th className="p-4 pl-6 font-semibold cursor-pointer select-none" onClick={() => handleSort("name")}>
-                      Asset Name {sortBy === "name" && (sortOrder === "asc" ? "▲" : "▼")}
-                    </th>
-                    <th className="p-4 font-semibold">Type</th>
-                    <th className="p-4 font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("qty")}>
-                      Shares {sortBy === "qty" && (sortOrder === "asc" ? "▲" : "▼")}
-                    </th>
-                    <th className="p-4 font-semibold text-right">Avg Price</th>
-                    <th className="p-4 font-semibold text-right">Current Price</th>
-                    <th className="p-4 font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("value")}>
-                      Net Value {sortBy === "value" && (sortOrder === "asc" ? "▲" : "▼")}
-                    </th>
-                    <th className="p-4 font-semibold text-right">Allocation %</th>
-                    <th className="p-4 font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("profit")}>
-                      Gain / Loss {sortBy === "profit" && (sortOrder === "asc" ? "▲" : "▼")}
-                    </th>
-                    <th className="p-4 font-semibold text-center pr-6">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700 text-sm">
-                  {assetsLoading ? (
-                    <tr>
-                      <td colSpan="9" className="p-8 text-center text-gray-400">Loading holdings...</td>
+              {assets.length === 0 ? (
+                <div className="p-8">
+                  <EmptyState 
+                    icon="💼"
+                    title="No Holdings Found"
+                    message="No holdings yet. Add your first investment."
+                    actionText="Add Investment Now"
+                    onAction={() => setShowModal(true)}
+                  />
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-900/50 text-gray-400 text-xs uppercase tracking-wider">
+                      <th className="p-4 pl-6 font-semibold cursor-pointer select-none" onClick={() => handleSort("name")}>
+                        Asset Name {sortBy === "name" && (sortOrder === "asc" ? "▲" : "▼")}
+                      </th>
+                      <th className="p-4 font-semibold">Type</th>
+                      <th className="p-4 font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("qty")}>
+                        Shares {sortBy === "qty" && (sortOrder === "asc" ? "▲" : "▼")}
+                      </th>
+                      <th className="p-4 font-semibold text-right">Avg Price</th>
+                      <th className="p-4 font-semibold text-right">Current Price</th>
+                      <th className="p-4 font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("value")}>
+                        Net Value {sortBy === "value" && (sortOrder === "asc" ? "▲" : "▼")}
+                      </th>
+                      <th className="p-4 font-semibold text-right">Allocation %</th>
+                      <th className="p-4 font-semibold text-right cursor-pointer select-none" onClick={() => handleSort("profit")}>
+                        Gain / Loss {sortBy === "profit" && (sortOrder === "asc" ? "▲" : "▼")}
+                      </th>
+                      <th className="p-4 font-semibold text-center pr-6">Actions</th>
                     </tr>
-                  ) : filteredAssets.length === 0 ? (
-                    <tr>
-                      <td colSpan="9" className="p-8 text-center text-gray-400">No holdings match your search filters.</td>
-                    </tr>
-                  ) : (
-                    filteredAssets.map((a) => {
-                      const netVal = a.currentPrice * a.quantity;
-                      const profit = (a.currentPrice - a.purchasePrice) * a.quantity;
-                      const isPositive = profit >= 0;
-                      const isSelected = selectedAssetForChart && selectedAssetForChart._id === a._id;
-                      const allocPct = totalValue > 0 ? (netVal / totalValue) * 100 : 0;
-                      
-                      return (
-                        <tr 
-                          key={a._id} 
-                          onClick={() => setSelectedAssetForChart(a)}
-                          className={`hover:bg-gray-700/50 cursor-pointer transition ${isSelected ? 'bg-gray-700/80 border-l-4 border-blue-500' : 'border-l-4 border-transparent'}`}
-                        >
-                          <td className="p-4 pl-6 font-bold text-white">{a.name}</td>
-                          <td className="p-4">
-                            <span className="bg-gray-700 text-blue-300 text-xs px-2 py-0.5 rounded border border-gray-600">
-                              {a.type}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right font-medium text-gray-300">{a.quantity}</td>
-                          <td className="p-4 text-right text-gray-400">₹{a.purchasePrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="p-4 text-right font-medium text-white">₹{a.currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="p-4 text-right font-bold text-white">₹{netVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-4 text-right text-teal-400 font-semibold">{allocPct.toFixed(1)}%</td>
-                          <td className="p-4 text-right">
-                            <span className={`inline-flex items-center gap-1 font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                              {isPositive ? '▲' : '▼'} ₹{Math.abs(profit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </td>
-                          <td className="p-4 text-center pr-6 space-x-3" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className="text-gray-400 hover:text-blue-400 transition cursor-pointer"
-                              onClick={() => {
-                                setAssetToEdit(a);
-                                setShowModal(true);
-                              }}
-                              title="Edit"
-                            >
-                               ✏️
-                            </button>
-                            <button
-                              className="text-gray-400 hover:text-red-400 transition cursor-pointer"
-                              onClick={() => handleDeleteAsset(a._id)}
-                              title="Remove"
-                            >
-                              ❌
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700 text-sm">
+                    {assetsLoading ? (
+                      <tr>
+                        <td colSpan="9" className="p-8 text-center text-gray-400">Loading holdings...</td>
+                      </tr>
+                    ) : filteredAssets.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" className="p-8 text-center text-gray-400">No holdings match your search filters.</td>
+                      </tr>
+                    ) : (
+                      filteredAssets.map((a) => {
+                        const netVal = a.currentPrice * a.quantity;
+                        const profit = (a.currentPrice - a.purchasePrice) * a.quantity;
+                        const isPositive = profit >= 0;
+                        const isSelected = selectedAssetForChart && selectedAssetForChart._id === a._id;
+                        const allocPct = totalValue > 0 ? (netVal / totalValue) * 100 : 0;
+                        
+                        return (
+                          <tr 
+                            key={a._id} 
+                            onClick={() => setSelectedAssetForChart(a)}
+                            className={`hover:bg-gray-700/50 cursor-pointer transition ${isSelected ? 'bg-gray-700/80 border-l-4 border-blue-500' : 'border-l-4 border-transparent'}`}
+                          >
+                            <td className="p-4 pl-6 font-bold text-white">{a.name}</td>
+                            <td className="p-4">
+                              <span className="bg-gray-700 text-blue-300 text-xs px-2 py-0.5 rounded border border-gray-600">
+                                {a.type}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right font-medium text-gray-300">{a.quantity}</td>
+                            <td className="p-4 text-right text-gray-400">₹{a.purchasePrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right font-medium text-white">₹{a.currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right font-bold text-white">₹{netVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-teal-400 font-semibold">{allocPct.toFixed(1)}%</td>
+                            <td className="p-4 text-right">
+                              <span className={`inline-flex items-center gap-1 font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                {isPositive ? '▲' : '▼'} ₹{Math.abs(profit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center pr-6 space-x-3" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="text-gray-400 hover:text-blue-400 transition cursor-pointer"
+                                onClick={() => {
+                                  setAssetToEdit(a);
+                                  setShowModal(true);
+                                }}
+                                title="Edit"
+                              >
+                                 ✏️
+                              </button>
+                              <button
+                                className="text-gray-400 hover:text-red-400 transition cursor-pointer"
+                                onClick={() => handleDeleteAsset(a._id)}
+                                title="Remove"
+                              >
+                                ❌
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
@@ -909,31 +902,35 @@ export default function Dashboard() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-900/50 text-gray-400 text-xs uppercase tracking-wider">
-                  <th className="p-4 pl-6 font-semibold">Asset Name</th>
-                  <th className="p-4 font-semibold">Type</th>
-                  <th className="p-4 font-semibold">Action</th>
-                  <th className="p-4 font-semibold text-right">Quantity</th>
-                  <th className="p-4 font-semibold text-right">Price</th>
-                  <th className="p-4 font-semibold text-right">Tx Fee</th>
-                  <th className="p-4 font-semibold text-center">Date</th>
-                  <th className="p-4 font-semibold">Notes</th>
-                  <th className="p-4 font-semibold text-center pr-6">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700 text-sm">
-                {txLoading ? (
-                  <tr>
-                    <td colSpan="9" className="p-8 text-center text-gray-400">Loading transaction logs...</td>
+            {txLoading ? (
+              <div className="p-8 text-center text-gray-400">Loading transaction logs...</div>
+            ) : transactions.length === 0 ? (
+              <div className="p-8">
+                <EmptyState 
+                  icon="📜"
+                  title="No Transactions Logged"
+                  message="Record your first buy/sell event to start tracking cash flow history."
+                  actionText="Log Transaction"
+                  onAction={() => setShowTxModal(true)}
+                />
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-900/50 text-gray-400 text-xs uppercase tracking-wider">
+                    <th className="p-4 pl-6 font-semibold">Asset Name</th>
+                    <th className="p-4 font-semibold">Type</th>
+                    <th className="p-4 font-semibold">Action</th>
+                    <th className="p-4 font-semibold text-right">Quantity</th>
+                    <th className="p-4 font-semibold text-right">Price</th>
+                    <th className="p-4 font-semibold text-right">Tx Fee</th>
+                    <th className="p-4 font-semibold text-center">Date</th>
+                    <th className="p-4 font-semibold">Notes</th>
+                    <th className="p-4 font-semibold text-center pr-6">Action</th>
                   </tr>
-                ) : transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan="9" className="p-8 text-center text-gray-400">No transaction logs available.</td>
-                  </tr>
-                ) : (
-                  transactions.map((tx) => (
+                </thead>
+                <tbody className="divide-y divide-gray-700 text-sm">
+                  {transactions.map((tx) => (
                     <tr key={tx._id} className="hover:bg-gray-700/30">
                       <td className="p-4 pl-6 font-bold text-white">{tx.assetName}</td>
                       <td className="p-4">
@@ -961,10 +958,10 @@ export default function Dashboard() {
                         </button>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
@@ -975,7 +972,13 @@ export default function Dashboard() {
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
             <h3 className="text-xl font-bold mb-6">Asset Class Allocation</h3>
             {assets.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-gray-500">No assets available.</div>
+              <div className="h-64 flex items-center justify-center">
+                <EmptyState 
+                  icon="📊"
+                  title="No assets available"
+                  message="Allocation analytics will display once holdings are active."
+                />
+              </div>
             ) : (
               <Chart
                 options={{
@@ -1002,25 +1005,41 @@ export default function Dashboard() {
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
             <h3 className="text-xl font-bold mb-1">Benchmark Comparison</h3>
             <p className="text-xs text-gray-400 mb-6">Normalized performance relative to Nifty 50 Index (Base 100)</p>
-            <Chart
-              options={{
-                chart: { background: 'transparent', toolbar: { show: false } },
-                theme: { mode: 'dark' },
-                xaxis: { type: 'datetime', labels: { style: { colors: '#9ca3af' } } },
-                yaxis: { labels: { formatter: (v) => `${v.toFixed(0)}%` } },
-                colors: ['#3b82f6', '#10b981'],
-                stroke: { width: 3, curve: 'smooth' }
-              }}
-              series={benchmarkChartData}
-              type="line"
-              height={280}
-            />
+            {assets.length === 0 ? (
+              <div className="h-64 flex items-center justify-center">
+                <EmptyState 
+                  icon="⚖️"
+                  title="No portfolio data available"
+                  message="Add investments to compare with Nifty 50."
+                />
+              </div>
+            ) : (
+              <Chart
+                options={{
+                  chart: { background: 'transparent', toolbar: { show: false } },
+                  theme: { mode: 'dark' },
+                  xaxis: { type: 'datetime', labels: { style: { colors: '#9ca3af' } } },
+                  yaxis: { labels: { formatter: (v) => `${v.toFixed(0)}%` } },
+                  colors: ['#3b82f6', '#10b981'],
+                  stroke: { width: 3, curve: 'smooth' }
+                }}
+                series={benchmarkChartData}
+                type="line"
+                height={280}
+              />
+            )}
           </div>
 
           {/* Risk Alerts list */}
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl lg:col-span-2">
             <h3 className="text-xl font-bold mb-4">Risk Audit & Concentration Analysis</h3>
-            {concentrationAlerts.length === 0 ? (
+            {assets.length === 0 ? (
+              <EmptyState 
+                icon="🛡️"
+                title="No investments found"
+                message="Risk analytics will appear after adding assets."
+              />
+            ) : concentrationAlerts.length === 0 ? (
               <div className="p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-sm font-medium">
                 ✅ Your portfolio is well-diversified. No single asset exceeds a 25% allocation risk threshold.
               </div>
@@ -1097,27 +1116,29 @@ export default function Dashboard() {
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl lg:col-span-2">
             <h3 className="text-xl font-bold mb-4">Tracked Assets</h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-900/50 text-gray-400 text-xs uppercase tracking-wider">
-                    <th className="p-4 pl-6 font-semibold">Symbol</th>
-                    <th className="p-4 font-semibold">Asset Name</th>
-                    <th className="p-4 font-semibold">Type</th>
-                    <th className="p-4 font-semibold text-right">Target Price (Simulated)</th>
-                    <th className="p-4 font-semibold text-center pr-6">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700 text-sm">
-                  {watchlistLoading ? (
-                    <tr>
-                      <td colSpan="5" className="p-8 text-center text-gray-400">Loading watchlist...</td>
+              {watchlistLoading ? (
+                <div className="p-8 text-center text-gray-400">Loading watchlist...</div>
+              ) : watchlist.length === 0 ? (
+                <div className="p-8">
+                  <EmptyState 
+                    icon="👁️"
+                    title="Your watchlist is empty"
+                    message="Add stock or crypto tickers to monitor target prices."
+                  />
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-900/50 text-gray-400 text-xs uppercase tracking-wider">
+                      <th className="p-4 pl-6 font-semibold">Symbol</th>
+                      <th className="p-4 font-semibold">Asset Name</th>
+                      <th className="p-4 font-semibold">Type</th>
+                      <th className="p-4 font-semibold text-right">Target Price (Simulated)</th>
+                      <th className="p-4 font-semibold text-center pr-6">Action</th>
                     </tr>
-                  ) : watchlist.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="p-8 text-center text-gray-400">No assets watched yet.</td>
-                    </tr>
-                  ) : (
-                    watchlist.map((item) => {
+                  </thead>
+                  <tbody className="divide-y divide-gray-700 text-sm">
+                    {watchlist.map((item) => {
                       const mockTargetPrice = (item.symbol.charCodeAt(0) % 10) * 150 + 200;
                       return (
                         <tr key={item._id} className="hover:bg-gray-700/30">
@@ -1140,10 +1161,10 @@ export default function Dashboard() {
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                </tbody>
-              </table>
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
