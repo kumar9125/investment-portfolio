@@ -8,10 +8,14 @@ const portfolioSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: true
+    required: [true, "Portfolio name is required"],
+    trim: true,
+    maxlength: [100, "Portfolio name cannot exceed 100 characters"]
   },
   description: {
-    type: String
+    type: String,
+    trim: true,
+    maxlength: [500, "Description cannot exceed 500 characters"]
   }
 }, { timestamps: true });
 

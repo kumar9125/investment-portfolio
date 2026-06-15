@@ -6,22 +6,68 @@ import { useNavigate } from "react-router-dom";
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { loading, error } = useSelector((state) => state.auth);
+  const { loading, error: serverError } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
 
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const validate = (name, value) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    let error = "";
+    if (name === "email") {
+      const val = value.trim();
+      if (!val) error = "Email is required";
+      else if (!emailRegex.test(val)) error = "Please enter a valid email address";
+    }
+    if (name === "password") {
+      if (!value) error = "Password is required";
+    }
+    return error;
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+
+    // Clear error dynamically
+    if (fieldErrors[name]) {
+      setFieldErrors({ ...fieldErrors, [name]: "" });
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const error = validate(name, value);
+    setFieldErrors((prev) => ({ ...prev, [name]: error }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("[Login Page] Submit button clicked. Form data:", { ...formData, password: "[REDACTED]" });
+
+    const errors = {};
+    Object.keys(formData).forEach((key) => {
+      const err = validate(key, formData[key]);
+      if (err) errors[key] = err;
+    });
+
+    if (Object.keys(errors).length > 0) {
+      console.warn("[Login Page] Validation errors prevent submit:", errors);
+      setFieldErrors(errors);
+      return;
+    }
+
     try {
       console.log("[Login Page] Dispatching loginUser action...");
-      const result = await dispatch(loginUser(formData)).unwrap();
+      const normalizedData = {
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+      };
+      const result = await dispatch(loginUser(normalizedData)).unwrap();
       console.log("[Login Page] loginUser resolved successfully. Payload returned:", result);
       console.log("[Login Page] Redirecting user to /dashboard...");
       navigate("/dashboard");
@@ -29,6 +75,8 @@ const Login = () => {
       console.error("❌ [Login Page] Login error caught in component:", err);
     }
   };
+
+  const hasErrors = Object.values(fieldErrors).some((err) => !!err);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-700 via-cyan-100 to-cyan-200">
@@ -49,30 +97,42 @@ const Login = () => {
           onSubmit={handleSubmit}
           className="w-full flex flex-col gap-4 mb-2"
         >
-          <input
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            className="px-4 py-3 rounded-lg border border-cyan-200 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
-            autoComplete="username"
-            required
-          />
-          <input
-            name="password"
-            placeholder="Password"
-            type="password"
-            value={formData.password}
-            onChange={handleChange}
-            className="px-4 py-3 rounded-lg border border-cyan-200 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
-            autoComplete="current-password"
-            required
-          />
+          {/* Email */}
+          <div className="flex flex-col">
+            <input
+              name="email"
+              placeholder="Email"
+              value={formData.email}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.email ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
+              autoComplete="username"
+              required
+            />
+            {fieldErrors.email && <span className="text-red-500 text-xs mt-1 pl-1 font-medium">{fieldErrors.email}</span>}
+          </div>
+
+          {/* Password */}
+          <div className="flex flex-col">
+            <input
+              name="password"
+              placeholder="Password"
+              type="password"
+              value={formData.password}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.password ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
+              autoComplete="current-password"
+              required
+            />
+            {fieldErrors.password && <span className="text-red-500 text-xs mt-1 pl-1 font-medium">{fieldErrors.password}</span>}
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || hasErrors}
             className={`mt-2 py-3 rounded-lg bg-gradient-to-r from-teal-700 to-cyan-300 text-white font-bold text-lg shadow-md transition hover:shadow-lg hover:from-teal-800 hover:to-cyan-400 focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-              loading ? "opacity-70 cursor-not-allowed" : ""
+              loading || hasErrors ? "opacity-60 cursor-not-allowed" : ""
             }`}
           >
             {loading ? (
@@ -82,9 +142,9 @@ const Login = () => {
             )}
           </button>
         </form>
-        {error && (
+        {serverError && (
           <p className="text-red-500 mt-2 font-medium text-base text-center">
-            {error}
+            {serverError}
           </p>
         )}
       </div>

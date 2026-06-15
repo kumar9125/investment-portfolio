@@ -110,7 +110,7 @@ export default function Dashboard() {
     },
     yaxis: {
       labels: {
-        formatter: (value) => `$${value.toFixed(2)}`,
+        formatter: (value) => `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         style: { colors: '#9ca3af' }
       }
     },
@@ -185,14 +185,14 @@ export default function Dashboard() {
             <svg className="w-16 h-16" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z"></path></svg>
           </div>
           <h3 className="text-gray-400 font-semibold mb-1">Total Balance</h3>
-          <p className="text-4xl font-bold text-white mb-2">${totalValue.toFixed(2)}</p>
+          <p className="text-4xl font-bold text-white mb-2">₹{totalValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
 
         <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700 shadow-xl">
           <h3 className="text-gray-400 font-semibold mb-1">Total Profit / Loss</h3>
           <div className="flex items-end gap-3 mb-2">
             <p className={`text-[20px] font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              ${totalProfit >= 0 ? '+' : ''}{totalProfit.toFixed(2)}
+              {totalProfit >= 0 ? '+' : '-'}₹{Math.abs(totalProfit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p><br/>
             {/* <span className={`text-lg font-medium mb-1 ${profitPercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               ({profitPercentage >= 0 ? '+' : ''}{profitPercentage.toFixed(2)}%)
@@ -206,7 +206,7 @@ export default function Dashboard() {
             <div>
               <p className="text-2xl font-bold text-blue-400 mb-1">{topGainer.name}</p>
               <p className="text-green-400 font-medium">
-                +${(topGainer.currentPrice - topGainer.purchasePrice).toFixed(2)} per share
+                +₹{(topGainer.currentPrice - topGainer.purchasePrice).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per share
               </p>
             </div>
           ) : (
@@ -329,11 +329,11 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className="p-4 text-right font-medium text-gray-300">{a.quantity}</td>
-                      <td className="p-4 text-right text-gray-400">${a.purchasePrice.toFixed(2)}</td>
-                      <td className="p-4 text-right font-medium text-white">${a.currentPrice.toFixed(2)}</td>
+                      <td className="p-4 text-right text-gray-400">₹{a.purchasePrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="p-4 text-right font-medium text-white">₹{a.currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="p-4 text-right">
                         <span className={`inline-flex items-center gap-1 font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                          {isPositive ? '▲' : '▼'} ${Math.abs(profit).toFixed(2)}
+                          {isPositive ? '▲' : '▼'} ₹{Math.abs(profit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="p-4 text-center pr-6 space-x-3">

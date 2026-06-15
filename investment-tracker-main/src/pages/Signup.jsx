@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 const Signup = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { loading, error } = useSelector((state) => state.auth);
+  const { loading, error: serverError } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -14,19 +14,78 @@ const Signup = () => {
     password: "",
   });
 
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const validate = (name, value) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const nameRegex = /^[a-zA-Z]+( [a-zA-Z]+)*$/;
+
+    let error = "";
+    if (name === "name") {
+      const val = value.trim();
+      if (!val) error = "Name is required";
+      else if (val.length < 2 || val.length > 50) error = "Name must be between 2 and 50 characters";
+      else if (!nameRegex.test(val)) error = "Name can only contain letters and single spaces";
+    }
+    if (name === "email") {
+      const val = value.trim();
+      if (!val) error = "Email is required";
+      else if (val.length > 254) error = "Email cannot exceed 254 characters";
+      else if (!emailRegex.test(val)) error = "Please enter a valid email address";
+    }
+    if (name === "password") {
+      if (!value) error = "Password is required";
+      else if (value.length < 8) error = "Password must be at least 8 characters long";
+      else if (!passwordRegex.test(value)) error = "Must contain 1 uppercase, 1 lowercase, 1 number & 1 special char";
+    }
+    return error;
+  };
+
   const handleChange = (e) => {
     let { name, value } = e.target;
     if (name === "name") {
+      // Prevent numbers and special characters directly during typing
       value = value.replace(/[^a-zA-Z\s]/g, "");
     }
     setFormData({ ...formData, [name]: value });
+    
+    // Clear error dynamically as the user types
+    if (fieldErrors[name]) {
+      setFieldErrors({ ...fieldErrors, [name]: "" });
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const error = validate(name, value);
+    setFieldErrors((prev) => ({ ...prev, [name]: error }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log("[Signup Page] Submit button clicked. Form data:", { ...formData, password: "[REDACTED]" });
+
+    // Validate all fields
+    const errors = {};
+    Object.keys(formData).forEach((key) => {
+      const err = validate(key, formData[key]);
+      if (err) errors[key] = err;
+    });
+
+    if (Object.keys(errors).length > 0) {
+      console.warn("[Signup Page] Validation errors prevent submit:", errors);
+      setFieldErrors(errors);
+      return;
+    }
+
     console.log("[Signup Page] Dispatching signupUser action...");
-    const result = await dispatch(signupUser(formData));
+    const normalizedData = {
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password,
+    };
+    const result = await dispatch(signupUser(normalizedData));
     if (signupUser.fulfilled.match(result)) {
       console.log("[Signup Page] signupUser action completed successfully. Redirecting user to /login...");
       navigate("/login");
@@ -34,6 +93,8 @@ const Signup = () => {
       console.error("[Signup Page] signupUser action failed. Result payload:", result.payload);
     }
   };
+
+  const hasErrors = Object.values(fieldErrors).some((err) => !!err);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-700 via-cyan-100 to-cyan-200">
@@ -47,39 +108,57 @@ const Signup = () => {
         <h2 className="font-bold text-2xl text-gray-900 mb-1 tracking-wide">Create Account</h2>
         <p className="text-teal-700 text-base mb-6 font-medium">Sign up for your investment portfolio</p>
         <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4 mb-2">
-          <input
-            name="name"
-            placeholder="Name"
-            value={formData.name}
-            onChange={handleChange}
-            className="px-4 py-3 rounded-lg border border-cyan-200 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
-            autoComplete="name"
-            required
-          />
-          <input
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            className="px-4 py-3 rounded-lg border border-cyan-200 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
-            autoComplete="username"
-            required
-          />
-          <input
-            name="password"
-            type="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={handleChange}
-            className="px-4 py-3 rounded-lg border border-cyan-200 bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-400 transition"
-            autoComplete="new-password"
-            required
-          />
+          {/* Name */}
+          <div className="flex flex-col">
+            <input
+              name="name"
+              placeholder="Name"
+              value={formData.name}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.name ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
+              autoComplete="name"
+              required
+            />
+            {fieldErrors.name && <span className="text-red-500 text-xs mt-1 pl-1 font-medium">{fieldErrors.name}</span>}
+          </div>
+
+          {/* Email */}
+          <div className="flex flex-col">
+            <input
+              name="email"
+              placeholder="Email"
+              value={formData.email}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.email ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
+              autoComplete="username"
+              required
+            />
+            {fieldErrors.email && <span className="text-red-500 text-xs mt-1 pl-1 font-medium">{fieldErrors.email}</span>}
+          </div>
+
+          {/* Password */}
+          <div className="flex flex-col">
+            <input
+              name="password"
+              type="password"
+              placeholder="Password"
+              value={formData.password}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`px-4 py-3 rounded-lg border bg-gray-50 text-gray-900 focus:outline-none focus:ring-2 transition ${fieldErrors.password ? "border-red-500 focus:ring-red-400" : "border-cyan-200 focus:ring-teal-400"}`}
+              autoComplete="new-password"
+              required
+            />
+            {fieldErrors.password && <span className="text-red-500 text-xs mt-1 pl-1 font-medium">{fieldErrors.password}</span>}
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || hasErrors}
             className={`mt-2 py-3 rounded-lg bg-gradient-to-r from-teal-700 to-cyan-300 text-white font-bold text-lg shadow-md transition hover:shadow-lg hover:from-teal-800 hover:to-cyan-400 focus:outline-none focus:ring-2 focus:ring-teal-400 ${
-              loading ? "opacity-70 cursor-not-allowed" : ""
+              loading || hasErrors ? "opacity-60 cursor-not-allowed" : ""
             }`}
           >
             {loading ? (
@@ -89,7 +168,7 @@ const Signup = () => {
             )}
           </button>
         </form>
-        {error && <p className="text-red-500 mt-2 font-medium text-base text-center">{error}</p>}
+        {serverError && <p className="text-red-500 mt-2 font-medium text-base text-center">{serverError}</p>}
       </div>
       <style>
         {`

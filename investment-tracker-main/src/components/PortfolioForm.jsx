@@ -24,7 +24,17 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
 
   const validate = () => {
     const errors = {};
-    if (!name.trim()) errors.name = "Name is required";
+    const cleanName = name.replace(/<[^>]*>/g, "").trim();
+    if (!cleanName) {
+      errors.name = "Name is required";
+    } else if (cleanName.length > 100) {
+      errors.name = "Portfolio name cannot exceed 100 characters";
+    }
+
+    const cleanDescription = description.replace(/<[^>]*>/g, "").trim();
+    if (cleanDescription.length > 500) {
+      errors.description = "Description cannot exceed 500 characters";
+    }
     return errors;
   };
 
@@ -36,10 +46,13 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
       return;
     }
 
+    const cleanName = name.replace(/<[^>]*>/g, "").trim();
+    const cleanDescription = description.replace(/<[^>]*>/g, "").trim();
+
     const portfolioData = {
       user: user?._id,
-      name,
-      description: description.trim() || undefined,
+      name: cleanName,
+      description: cleanDescription || undefined,
     };
 
     if (existingPortfolio) {
@@ -51,6 +64,7 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
         .then(() => {
           setName("");
           setDescription("");
+          setErrors({});
           onSave && onSave();
         })
         .catch((err) => console.log(err));
@@ -66,7 +80,7 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+          className={`w-full bg-gray-700 border rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none ${errors.name ? "border-red-500" : "border-gray-600"}`}
           required
         />
         {errors.name && <div className="text-red-400 text-sm mt-1">{errors.name}</div>}
@@ -78,9 +92,10 @@ function PortfolioForm({ existingPortfolio = null, onSave }) {
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px]"
+          className={`w-full bg-gray-700 border rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px] ${errors.description ? "border-red-500" : "border-gray-600"}`}
           placeholder="(Optional)"
         />
+        {errors.description && <div className="text-red-400 text-sm mt-1">{errors.description}</div>}
       </div>
 
       {/* Submit Button */}
