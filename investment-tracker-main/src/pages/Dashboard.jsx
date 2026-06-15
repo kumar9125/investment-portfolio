@@ -345,11 +345,13 @@ export default function Dashboard() {
   };
 
   const handleRemoveWatchlist = async (id) => {
-    try {
-      await axiosInstance.delete(`/watchlist/${id}`);
-      fetchWatchlistData();
-    } catch (err) {
-      alert(err.response?.data?.message || err.message);
+    if (window.confirm("Are you sure you want to remove this symbol from your watchlist?")) {
+      try {
+        await axiosInstance.delete(`/watchlist/${id}`);
+        fetchWatchlistData();
+      } catch (err) {
+        alert(err.response?.data?.message || err.message);
+      }
     }
   };
 
