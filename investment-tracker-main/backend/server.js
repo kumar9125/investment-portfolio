@@ -91,7 +91,7 @@ const startServer = async () => {
     console.log("Connecting to MongoDB...");
     await connectDB();
     console.log("MongoDB connection function completed.");
-    app.listen(PORT, () => {
+    return app.listen(PORT, () => {
       console.log(`✅ Server running in ${NODE_ENV} mode on port ${PORT}`);
     });
   } catch (error) {
@@ -100,5 +100,9 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };
 
